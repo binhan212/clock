@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đồng Hồ Đếm Ngược Cao Cấp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-image: url('https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&q=80&w=1920');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Hiệu ứng kính nổi cao cấp */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 3rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .timer-input::-webkit-inner-spin-button,
+        .timer-input::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.4s ease-out;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        /* Modal styling */
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .animate-scale-in {
+            animation: scaleIn 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="p-4">
+    
+    <div class="fixed inset-0 bg-black/30 -z-10"></div>
+
+    <div class="glass-card p-8 sm:p-12 w-full max-w-lg transition-all duration-500">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-white text-2xl sm:text-3xl font-extrabold tracking-tight mb-2 drop-shadow-md uppercase">Tập Trung</h1>
+            <div class="h-1 w-10 bg-white/40 mx-auto rounded-full"></div>
+        </div>
+
+        <!-- Thiết lập thời gian -->
+        <div id="setup-section" class="space-y-8">
+            <div class="grid grid-cols-3 gap-3 sm:gap-4">
+                <div class="group">
+                    <label class="block text-center text-white/70 text-[10px] uppercase font-bold tracking-widest mb-3 group-hover:text-white transition-colors">Giờ</label>
+                    <input type="number" id="hours-input" min="0" max="99" value="0" 
+                        class="timer-input w-full bg-white/10 border border-white/20 rounded-2xl py-4 text-center text-white text-2xl sm:text-3xl font-bold focus:bg-white/20 focus:border-white/40 outline-none transition-all">
+                </div>
+                <div class="group">
+                    <label class="block text-center text-white/70 text-[10px] uppercase font-bold tracking-widest mb-3 group-hover:text-white transition-colors">Phút</label>
+                    <input type="number" id="minutes-input" min="0" max="59" value="0" 
+                        class="timer-input w-full bg-white/10 border border-white/20 rounded-2xl py-4 text-center text-white text-2xl sm:text-3xl font-bold focus:bg-white/20 focus:border-white/40 outline-none transition-all">
+                </div>
+                <div class="group">
+                    <label class="block text-center text-white/70 text-[10px] uppercase font-bold tracking-widest mb-3 group-hover:text-white transition-colors">Giây</label>
+                    <input type="number" id="seconds-input" min="0" max="59" value="0" 
+                        class="timer-input w-full bg-white/10 border border-white/20 rounded-2xl py-4 text-center text-white text-2xl sm:text-3xl font-bold focus:bg-white/20 focus:border-white/40 outline-none transition-all">
+                </div>
+            </div>
+        </div>
+
+        <!-- Hiển thị đếm ngược -->
+        <div id="display-section" class="hidden relative flex flex-col items-center justify-center py-2">
+            <svg class="w-56 h-56 sm:w-72 sm:h-72 transform -rotate-90">
+                <circle cx="50%" cy="50%" r="42%" stroke="currentColor" stroke-width="6" fill="transparent" class="text-white/10"></circle>
+                <circle id="progress-ring" cx="50%" cy="50%" r="42%" stroke="currentColor" stroke-width="6" fill="transparent" 
+                    stroke-dasharray="1000" stroke-dashoffset="1000" stroke-linecap="round"
+                    class="progress-ring__circle text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]"></circle>
+            </svg>
+            
+            <div class="absolute inset-0 flex flex-col items-center justify-center mt-2">
+                <div class="flex items-baseline gap-1 text-white font-bold">
+                    <span id="display-hours" class="text-4xl sm:text-5xl">00</span>
+                    <span class="text-xl opacity-30">:</span>
+                    <span id="display-minutes" class="text-4xl sm:text-5xl">00</span>
+                    <span class="text-xl opacity-30">:</span>
+                    <span id="display-seconds" class="text-4xl sm:text-5xl">00</span>
+                </div>
+                <p id="timer-status" class="text-white/60 text-[10px] uppercase tracking-[0.4em] mt-3 font-bold">Đang chạy</p>
+            </div>
+        </div>
+
+        <!-- Nút điều khiển -->
+        <div class="mt-10 flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <button id="start-btn" class="flex-[2] bg-white text-slate-800 hover:bg-slate-100 font-bold py-4 sm:py-5 px-8 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-lg active:scale-95 group">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 sm:w-6 sm:h-6 group-hover:scale-110 transition-transform">
+                    <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-sm sm:text-base">Bắt đầu ngay</span>
+            </button>
+
+            <button id="pause-btn" class="hidden flex-[2] bg-white/20 text-white hover:bg-white/30 font-bold py-4 sm:py-5 px-8 rounded-2xl flex items-center justify-center gap-3 transition-all backdrop-blur-sm active:scale-95 group">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 sm:w-6 sm:h-6 group-hover:scale-110 transition-transform">
+                    <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75.75v12a.75.75 0 01-1.5 0V6a.75.75 0 01.75-.75zM17.25 5.25a.75.75 0 01.75.75v12a.75.75 0 01-1.5 0V6a.75.75 0 01.75-.75z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-sm sm:text-base">Tạm dừng</span>
+            </button>
+
+            <button id="reset-btn" class="flex-1 bg-white/10 text-white hover:bg-white/20 font-bold py-4 sm:py-5 px-6 rounded-2xl flex items-center justify-center gap-2 transition-all backdrop-blur-sm active:scale-95 group border border-white/10">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-180 transition-transform duration-500">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                <span class="sm:hidden ml-1 uppercase">Đặt lại</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Thông Báo -->
+    <div id="finish-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="modal-backdrop absolute inset-0"></div>
+        <div class="glass-card p-8 sm:p-10 w-full max-w-sm relative z-10 text-center animate-scale-in">
+            <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-10 h-10 text-white">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0M3.124 7.5A8.969 8.969 0 015.292 3m13.416 0a8.969 8.969 0 012.168 4.5" />
+                </svg>
+            </div>
+            <h2 class="text-white text-2xl font-bold mb-2">Hết giờ rồi!</h2>
+            <p class="text-white/70 mb-8">Bạn đã hoàn thành phiên tập trung một cách tuyệt vời. Nghỉ ngơi một chút nhé!</p>
+            <button id="close-modal-btn" class="w-full bg-white text-slate-800 font-bold py-4 rounded-2xl hover:bg-slate-100 transition-all active:scale-95 shadow-lg">
+                Xác nhận
+            </button>
+        </div>
+    </div>
+
+    <!-- Âm thanh cảnh báo -->
+    <audio id="alert-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+    <script>
+        let countdown;
+        let timeLeft;
+        let totalTime;
+        let isRunning = false;
+
+        const hoursInput = document.getElementById('hours-input');
+        const minutesInput = document.getElementById('minutes-input');
+        const secondsInput = document.getElementById('seconds-input');
+        
+        const displayHours = document.getElementById('display-hours');
+        const displayMinutes = document.getElementById('display-minutes');
+        const displaySeconds = document.getElementById('display-seconds');
+        
+        const setupSection = document.getElementById('setup-section');
+        const displaySection = document.getElementById('display-section');
+        const progressRing = document.getElementById('progress-ring');
+        
+        const startBtn = document.getElementById('start-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const alertSound = document.getElementById('alert-sound');
+        
+        const finishModal = document.getElementById('finish-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+
+        // Circular progress setup
+        const radius = progressRing.r.baseVal.value;
+        const circumference = radius * 2 * Math.PI;
+        progressRing.style.strokeDasharray = `${circumference} ${circumference}`;
+        progressRing.style.strokeDashoffset = circumference;
+
+        function setProgress(percent) {
+            const offset = circumference - (percent / 100 * circumference);
+            progressRing.style.strokeDashoffset = offset;
+        }
+
+        function updateDisplay() {
+            const h = Math.floor(timeLeft / 3600);
+            const m = Math.floor((timeLeft % 3600) / 60);
+            const s = timeLeft % 60;
+
+            displayHours.textContent = h.toString().padStart(2, '0');
+            displayMinutes.textContent = m.toString().padStart(2, '0');
+            displaySeconds.textContent = s.toString().padStart(2, '0');
+            
+            const percent = (timeLeft / totalTime) * 100;
+            setProgress(percent);
+            
+            document.title = `${displayHours.textContent}:${displayMinutes.textContent}:${displaySeconds.textContent} - Đang chạy`;
+        }
+
+        function showModal() {
+            finishModal.classList.remove('hidden');
+            alertSound.play().catch(e => console.log("Audio play blocked"));
+        }
+
+        function hideModal() {
+            finishModal.classList.add('hidden');
+            alertSound.pause();
+            alertSound.currentTime = 0;
+            resetTimer();
+        }
+
+        function startTimer() {
+            if (!isRunning) {
+                if (timeLeft === undefined) {
+                    const h = parseInt(hoursInput.value) || 0;
+                    const m = parseInt(minutesInput.value) || 0;
+                    const s = parseInt(secondsInput.value) || 0;
+                    timeLeft = h * 3600 + m * 60 + s;
+                    totalTime = timeLeft;
+                }
+
+                if (timeLeft <= 0) {
+                    alert('Vui lòng nhập thời gian hợp lệ!');
+                    return;
+                }
+
+                isRunning = true;
+                setupSection.classList.add('hidden');
+                displaySection.classList.remove('hidden');
+                startBtn.classList.add('hidden');
+                pauseBtn.classList.remove('hidden');
+
+                updateDisplay();
+
+                countdown = setInterval(() => {
+                    timeLeft--;
+                    updateDisplay();
+
+                    if (timeLeft <= 0) {
+                        clearInterval(countdown);
+                        isRunning = false;
+                        showModal();
+                    }
+                }, 1000);
+            }
+        }
+
+        function pauseTimer() {
+            clearInterval(countdown);
+            isRunning = false;
+            startBtn.classList.remove('hidden');
+            pauseBtn.classList.add('hidden');
+            startBtn.querySelector('span').textContent = 'Tiếp tục';
+        }
+
+        function resetTimer() {
+            clearInterval(countdown);
+            isRunning = false;
+            timeLeft = undefined;
+            
+            setupSection.classList.remove('hidden');
+            displaySection.classList.add('hidden');
+            
+            startBtn.classList.remove('hidden');
+            pauseBtn.classList.add('hidden');
+            startBtn.querySelector('span').textContent = 'Bắt đầu ngay';
+            
+            hoursInput.value = 0;
+            minutesInput.value = 0;
+            secondsInput.value = 0;
+            setProgress(100);
+            document.title = "Đồng Hồ Đếm Ngược Cao Cấp";
+        }
+
+        startBtn.addEventListener('click', startTimer);
+        pauseBtn.addEventListener('click', pauseTimer);
+        resetBtn.addEventListener('click', resetTimer);
+        closeModalBtn.addEventListener('click', hideModal);
+
+        [hoursInput, minutesInput, secondsInput].forEach(input => {
+            input.addEventListener('change', () => {
+                let val = parseInt(input.value) || 0;
+                if (val < 0) val = 0;
+                if (input === hoursInput && val > 99) val = 99;
+                if ((input === minutesInput || input === secondsInput) && val > 59) val = 59;
+                input.value = val;
+            });
+            input.addEventListener('focus', () => input.select());
+        });
+    </script>
+</body>
+</html>
