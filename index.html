@@ -63,7 +63,7 @@
     <div class="glass-card p-8 sm:p-12 w-full max-w-lg transition-all duration-500">
         
         <div class="text-center mb-8">
-            <h1 class="text-white text-2xl sm:text-3xl font-extrabold tracking-tight mb-2 drop-shadow-md uppercase">Tập Trung</h1>
+            <h1 id="app-title" class="text-white text-2xl sm:text-3xl font-extrabold tracking-tight mb-2 drop-shadow-md uppercase">Thời gian còn lại</h1>
             <div class="h-1 w-10 bg-white/40 mx-auto rounded-full"></div>
         </div>
 
@@ -98,7 +98,7 @@
             </svg>
             
             <div class="absolute inset-0 flex flex-col items-center justify-center mt-2">
-                <div class="flex items-baseline gap-1 text-white font-bold">
+                <div id="time-digits" class="flex items-baseline gap-1 text-white font-bold">
                     <span id="display-hours" class="text-4xl sm:text-5xl">00</span>
                     <span class="text-xl opacity-30">:</span>
                     <span id="display-minutes" class="text-4xl sm:text-5xl">00</span>
@@ -149,9 +149,6 @@
         </div>
     </div>
 
-    <!-- Âm thanh cảnh báo -->
-    <audio id="alert-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
-
     <script>
         let countdown;
         let timeLeft;
@@ -173,13 +170,78 @@
         const startBtn = document.getElementById('start-btn');
         const pauseBtn = document.getElementById('pause-btn');
         const resetBtn = document.getElementById('reset-btn');
-        const alertSound = document.getElementById('alert-sound');
         
         const systemModal = document.getElementById('system-modal');
         const modalTitle = document.getElementById('modal-title');
         const modalMessage = document.getElementById('modal-message');
         const modalActionBtn = document.getElementById('modal-action-btn');
         const modalIconContainer = document.getElementById('modal-icon-container');
+
+        const timeDigits = document.getElementById('time-digits');
+        const appTitle = document.getElementById('app-title');
+        const WARNING_THRESHOLD = 10; // Số giây cuối cần cảnh báo
+
+        // Tạo tiếng bíp cảnh báo bằng Web Audio API (không phụ thuộc link ngoài,
+        // đảm bảo kêu đều đặn suốt 10 giây cuối, mỗi giây một tiếng)
+        let audioCtx;
+        function initAudioCtx() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+        function playWarningBeep() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(1046, now);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.18, now + 0.01);
+            gain.gain.linearRampToValueAtTime(0, now + 0.2);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.22);
+        }
+
+        // Tiếng chuông báo kết thúc phiên, kéo dài khoảng 3 giây (chuỗi 6 nốt x 0.5s)
+        let finishOscillators = [];
+        function stopFinishSound() {
+            finishOscillators.forEach(osc => {
+                try { osc.stop(); } catch (e) {}
+            });
+            finishOscillators = [];
+        }
+        function playFinishSound() {
+            if (!audioCtx) return;
+            stopFinishSound();
+            const notes = [880, 988, 1046, 880, 988, 1046];
+            let t = audioCtx.currentTime;
+            notes.forEach(freq => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, t);
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.25, t + 0.02);
+                gain.gain.linearRampToValueAtTime(0, t + 0.45);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(t);
+                osc.stop(t + 0.5);
+                finishOscillators.push(osc);
+                t += 0.5;
+            });
+        }
+
+        // Bật/tắt trạng thái cảnh báo: chỉ đổi màu đỏ cho tiêu đề, không nhấp nháy
+        function setWarningState(active) {
+            appTitle.style.color = active ? '#f87171' : '';
+        }
 
         // Circular progress setup
         const radius = progressRing.r.baseVal.value;
@@ -205,6 +267,13 @@
             setProgress(percent);
             
             document.title = `${displayHours.textContent}:${displayMinutes.textContent}:${displaySeconds.textContent} - Đang chạy`;
+
+            // Cảnh báo khi còn 10 giây cuối: chữ + tiêu đề + viền tròn chuyển đỏ nhấp nháy
+            if (timeLeft > 0 && timeLeft <= WARNING_THRESHOLD) {
+                setWarningState(true);
+            } else {
+                setWarningState(false);
+            }
         }
 
         function showSystemModal(type, title, message) {
@@ -216,7 +285,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-10 h-10 text-white">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0M3.124 7.5A8.969 8.969 0 015.292 3m13.416 0a8.969 8.969 0 012.168 4.5" />
                     </svg>`;
-                alertSound.play().catch(() => {});
+                playFinishSound();
             } else {
                 modalIconContainer.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-10 h-10 text-amber-300">
@@ -229,8 +298,7 @@
 
         function hideSystemModal() {
             systemModal.classList.add('hidden');
-            alertSound.pause();
-            alertSound.currentTime = 0;
+            stopFinishSound();
             
             // Nếu là hoàn thành phiên, tự động đưa về trạng thái sẵn sàng cho phiên mới
             if (timeLeft <= 0) {
@@ -274,12 +342,17 @@
                 displaySection.classList.remove('hidden');
                 startBtn.classList.add('hidden');
                 pauseBtn.classList.remove('hidden');
+                initAudioCtx();
 
                 updateDisplay();
 
                 countdown = setInterval(() => {
                     timeLeft--;
                     updateDisplay();
+
+                    if (timeLeft > 0 && timeLeft <= WARNING_THRESHOLD) {
+                        playWarningBeep();
+                    }
 
                     if (timeLeft <= 0) {
                         clearInterval(countdown);
@@ -312,6 +385,7 @@
             secondsInput.value = 0;
             setProgress(100);
             document.title = "Đồng Hồ Đếm Ngược Cao Cấp";
+            setWarningState(false);
         }
 
         startBtn.addEventListener('click', startTimer);
