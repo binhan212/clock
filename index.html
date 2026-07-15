@@ -21,7 +21,6 @@
             overflow: hidden;
         }
 
-        /* Hiệu ứng kính nổi cao cấp */
         .glass-card {
             background: rgba(255, 255, 255, 0.12);
             backdrop-filter: blur(25px) saturate(180%);
@@ -43,7 +42,6 @@
             transform-origin: 50% 50%;
         }
 
-        /* Modal styling */
         .modal-backdrop {
             background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(8px);
@@ -136,18 +134,16 @@
         </div>
     </div>
 
-    <!-- Modal Thông Báo -->
-    <div id="finish-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+    <!-- Modal Hệ Thống (Dùng chung cho cả hoàn thành và cảnh báo) -->
+    <div id="system-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
         <div class="modal-backdrop absolute inset-0"></div>
         <div class="glass-card p-8 sm:p-10 w-full max-w-sm relative z-10 text-center animate-scale-in">
-            <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-10 h-10 text-white">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0M3.124 7.5A8.969 8.969 0 015.292 3m13.416 0a8.969 8.969 0 012.168 4.5" />
-                </svg>
+            <div id="modal-icon-container" class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <!-- Icon sẽ được thay đổi bằng JS -->
             </div>
-            <h2 class="text-white text-2xl font-bold mb-2">Hết giờ rồi!</h2>
-            <p class="text-white/70 mb-8">Bạn đã hoàn thành phiên tập trung một cách tuyệt vời. Nghỉ ngơi một chút nhé!</p>
-            <button id="close-modal-btn" class="w-full bg-white text-slate-800 font-bold py-4 rounded-2xl hover:bg-slate-100 transition-all active:scale-95 shadow-lg">
+            <h2 id="modal-title" class="text-white text-2xl font-bold mb-2">Tiêu đề</h2>
+            <p id="modal-message" class="text-white/70 mb-8">Nội dung thông báo.</p>
+            <button id="modal-action-btn" class="w-full bg-white text-slate-800 font-bold py-4 rounded-2xl hover:bg-slate-100 transition-all active:scale-95 shadow-lg">
                 Xác nhận
             </button>
         </div>
@@ -179,8 +175,11 @@
         const resetBtn = document.getElementById('reset-btn');
         const alertSound = document.getElementById('alert-sound');
         
-        const finishModal = document.getElementById('finish-modal');
-        const closeModalBtn = document.getElementById('close-modal-btn');
+        const systemModal = document.getElementById('system-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalActionBtn = document.getElementById('modal-action-btn');
+        const modalIconContainer = document.getElementById('modal-icon-container');
 
         // Circular progress setup
         const radius = progressRing.r.baseVal.value;
@@ -208,21 +207,55 @@
             document.title = `${displayHours.textContent}:${displayMinutes.textContent}:${displaySeconds.textContent} - Đang chạy`;
         }
 
-        function showModal() {
-            finishModal.classList.remove('hidden');
-            alertSound.play().catch(e => console.log("Audio play blocked"));
+        function showSystemModal(type, title, message) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            
+            if (type === 'finish') {
+                modalIconContainer.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-10 h-10 text-white">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0M3.124 7.5A8.969 8.969 0 015.292 3m13.416 0a8.969 8.969 0 012.168 4.5" />
+                    </svg>`;
+                alertSound.play().catch(() => {});
+            } else {
+                modalIconContainer.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-10 h-10 text-amber-300">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>`;
+            }
+            
+            systemModal.classList.remove('hidden');
         }
 
-        function hideModal() {
-            finishModal.classList.add('hidden');
+        function hideSystemModal() {
+            systemModal.classList.add('hidden');
             alertSound.pause();
             alertSound.currentTime = 0;
-            resetTimer();
+            
+            // Nếu là hoàn thành phiên, tự động đưa về trạng thái sẵn sàng cho phiên mới
+            if (timeLeft <= 0) {
+                softReset();
+            }
+        }
+
+        // Hàm reset nhẹ nhàng để sẵn sàng cho phiên mới mà không xóa dữ liệu ô nhập
+        function softReset() {
+            clearInterval(countdown);
+            isRunning = false;
+            timeLeft = undefined;
+            setupSection.classList.remove('hidden');
+            displaySection.classList.add('hidden');
+            startBtn.classList.remove('hidden');
+            pauseBtn.classList.add('hidden');
+            startBtn.querySelector('span').textContent = 'Bắt đầu ngay';
+            setProgress(100);
+            document.title = "Đồng Hồ Đếm Ngược Cao Cấp";
         }
 
         function startTimer() {
             if (!isRunning) {
-                if (timeLeft === undefined) {
+                // Luôn lấy dữ liệu mới từ ô nhập nếu timeLeft chưa được khởi tạo (phiên mới)
+                if (timeLeft === undefined || timeLeft <= 0) {
                     const h = parseInt(hoursInput.value) || 0;
                     const m = parseInt(minutesInput.value) || 0;
                     const s = parseInt(secondsInput.value) || 0;
@@ -231,7 +264,8 @@
                 }
 
                 if (timeLeft <= 0) {
-                    alert('Vui lòng nhập thời gian hợp lệ!');
+                    showSystemModal('warning', 'Thông báo', 'Vui lòng nhập thời gian lớn hơn 0 để bắt đầu!');
+                    timeLeft = undefined; // Reset để lần sau lấy lại từ input
                     return;
                 }
 
@@ -250,7 +284,7 @@
                     if (timeLeft <= 0) {
                         clearInterval(countdown);
                         isRunning = false;
-                        showModal();
+                        showSystemModal('finish', 'Hết giờ rồi!', 'Bạn đã hoàn thành phiên tập trung một cách tuyệt vời.');
                     }
                 }, 1000);
             }
@@ -268,14 +302,11 @@
             clearInterval(countdown);
             isRunning = false;
             timeLeft = undefined;
-            
             setupSection.classList.remove('hidden');
             displaySection.classList.add('hidden');
-            
             startBtn.classList.remove('hidden');
             pauseBtn.classList.add('hidden');
             startBtn.querySelector('span').textContent = 'Bắt đầu ngay';
-            
             hoursInput.value = 0;
             minutesInput.value = 0;
             secondsInput.value = 0;
@@ -286,7 +317,7 @@
         startBtn.addEventListener('click', startTimer);
         pauseBtn.addEventListener('click', pauseTimer);
         resetBtn.addEventListener('click', resetTimer);
-        closeModalBtn.addEventListener('click', hideModal);
+        modalActionBtn.addEventListener('click', hideSystemModal);
 
         [hoursInput, minutesInput, secondsInput].forEach(input => {
             input.addEventListener('change', () => {
@@ -295,6 +326,8 @@
                 if (input === hoursInput && val > 99) val = 99;
                 if ((input === minutesInput || input === secondsInput) && val > 59) val = 59;
                 input.value = val;
+                // Nếu đang ở trạng thái sẵn sàng, xóa timeLeft cũ để nhận giá trị mới
+                if (!isRunning) timeLeft = undefined;
             });
             input.addEventListener('focus', () => input.select());
         });
