@@ -143,9 +143,14 @@
             </div>
             <h2 id="modal-title" class="text-white text-2xl font-bold mb-2">Tiêu đề</h2>
             <p id="modal-message" class="text-white/70 mb-8">Nội dung thông báo.</p>
-            <button id="modal-action-btn" class="w-full bg-white text-slate-800 font-bold py-4 rounded-2xl hover:bg-slate-100 transition-all active:scale-95 shadow-lg">
-                Xác nhận
-            </button>
+            <div class="flex gap-3">
+                <button id="modal-secondary-btn" class="hidden flex-1 bg-white/10 text-white font-bold py-4 rounded-2xl hover:bg-white/20 transition-all active:scale-95 border border-white/10">
+                    Hủy
+                </button>
+                <button id="modal-action-btn" class="flex-1 bg-white text-slate-800 font-bold py-4 rounded-2xl hover:bg-slate-100 transition-all active:scale-95 shadow-lg">
+                    Xác nhận
+                </button>
+            </div>
         </div>
     </div>
 
@@ -154,6 +159,7 @@
         let timeLeft;
         let totalTime;
         let isRunning = false;
+        let finishBellPlayed = false;
 
         const hoursInput = document.getElementById('hours-input');
         const minutesInput = document.getElementById('minutes-input');
@@ -175,9 +181,11 @@
         const modalTitle = document.getElementById('modal-title');
         const modalMessage = document.getElementById('modal-message');
         const modalActionBtn = document.getElementById('modal-action-btn');
+        const modalSecondaryBtn = document.getElementById('modal-secondary-btn');
         const modalIconContainer = document.getElementById('modal-icon-container');
 
         const timeDigits = document.getElementById('time-digits');
+        const timerStatus = document.getElementById('timer-status');
         const appTitle = document.getElementById('app-title');
         const WARNING_THRESHOLD = 10; // Số giây cuối cần cảnh báo
 
@@ -255,20 +263,26 @@
         }
 
         function updateDisplay() {
-            const h = Math.floor(timeLeft / 3600);
-            const m = Math.floor((timeLeft % 3600) / 60);
-            const s = timeLeft % 60;
+            const isNegative = timeLeft < 0;
+            const absoluteTime = Math.abs(timeLeft);
+            const h = Math.floor(absoluteTime / 3600);
+            const m = Math.floor((absoluteTime % 3600) / 60);
+            const s = absoluteTime % 60;
 
             displayHours.textContent = h.toString().padStart(2, '0');
             displayMinutes.textContent = m.toString().padStart(2, '0');
             displaySeconds.textContent = s.toString().padStart(2, '0');
             
-            const percent = (timeLeft / totalTime) * 100;
+            const percent = totalTime > 0 ? Math.max(0, Math.min(100, (timeLeft / totalTime) * 100)) : 0;
             setProgress(percent);
             
-            document.title = `${displayHours.textContent}:${displayMinutes.textContent}:${displaySeconds.textContent} - Đang chạy`;
+            document.title = `${displayHours.textContent}:${displayMinutes.textContent}:${displaySeconds.textContent} - ${isNegative ? 'Quá giờ' : 'Đang chạy'}`;
 
-            // Cảnh báo khi còn 10 giây cuối: chữ + tiêu đề + viền tròn chuyển đỏ nhấp nháy
+            timeDigits.classList.toggle('text-red-500', isNegative);
+            timeDigits.classList.toggle('text-white', !isNegative);
+            progressRing.style.color = isNegative ? '#f87171' : '#ffffff';
+            timerStatus.textContent = isNegative ? 'Quá thời hạn' : (timeLeft > 0 ? 'Đang chạy' : 'Sẵn sàng');
+
             if (timeLeft > 0 && timeLeft <= WARNING_THRESHOLD) {
                 setWarningState(true);
             } else {
@@ -276,9 +290,13 @@
             }
         }
 
-        function showSystemModal(type, title, message) {
+        function showSystemModal(type, title, message, options = {}) {
             modalTitle.textContent = title;
             modalMessage.textContent = message;
+            modalSecondaryBtn.classList.add('hidden');
+            modalSecondaryBtn.onclick = null;
+            modalActionBtn.textContent = options.actionLabel || 'Xác nhận';
+            modalActionBtn.onclick = options.action || hideSystemModal;
             
             if (type === 'finish') {
                 modalIconContainer.innerHTML = `
@@ -299,11 +317,6 @@
         function hideSystemModal() {
             systemModal.classList.add('hidden');
             stopFinishSound();
-            
-            // Nếu là hoàn thành phiên, tự động đưa về trạng thái sẵn sàng cho phiên mới
-            if (timeLeft <= 0) {
-                softReset();
-            }
         }
 
         // Hàm reset nhẹ nhàng để sẵn sàng cho phiên mới mà không xóa dữ liệu ô nhập
@@ -322,8 +335,7 @@
 
         function startTimer() {
             if (!isRunning) {
-                // Luôn lấy dữ liệu mới từ ô nhập nếu timeLeft chưa được khởi tạo (phiên mới)
-                if (timeLeft === undefined || timeLeft <= 0) {
+                if (timeLeft === undefined) {
                     const h = parseInt(hoursInput.value) || 0;
                     const m = parseInt(minutesInput.value) || 0;
                     const s = parseInt(secondsInput.value) || 0;
@@ -333,11 +345,12 @@
 
                 if (timeLeft <= 0) {
                     showSystemModal('warning', 'Thông báo', 'Vui lòng nhập thời gian lớn hơn 0 để bắt đầu!');
-                    timeLeft = undefined; // Reset để lần sau lấy lại từ input
+                    timeLeft = undefined;
                     return;
                 }
 
                 isRunning = true;
+                finishBellPlayed = false;
                 setupSection.classList.add('hidden');
                 displaySection.classList.remove('hidden');
                 startBtn.classList.add('hidden');
@@ -347,17 +360,16 @@
                 updateDisplay();
 
                 countdown = setInterval(() => {
+                    if (timeLeft === 0 && !finishBellPlayed) {
+                        finishBellPlayed = true;
+                        playFinishSound();
+                    }
+
                     timeLeft--;
                     updateDisplay();
 
                     if (timeLeft > 0 && timeLeft <= WARNING_THRESHOLD) {
                         playWarningBeep();
-                    }
-
-                    if (timeLeft <= 0) {
-                        clearInterval(countdown);
-                        isRunning = false;
-                        showSystemModal('finish', 'Hết giờ rồi!', 'Bạn đã hoàn thành phiên tập trung một cách tuyệt vời.');
                     }
                 }, 1000);
             }
@@ -369,6 +381,24 @@
             startBtn.classList.remove('hidden');
             pauseBtn.classList.add('hidden');
             startBtn.querySelector('span').textContent = 'Tiếp tục';
+
+            if (timeLeft < 0) {
+                showSystemModal('finish', 'Dừng phiên', 'Thời gian đã quá hạn. Bạn có muốn đặt lại đồng hồ không?', {
+                    actionLabel: 'Đặt lại',
+                    action: () => {
+                        hideSystemModal();
+                        resetTimer();
+                    }
+                });
+                modalSecondaryBtn.classList.remove('hidden');
+                modalSecondaryBtn.textContent = 'Hủy';
+                modalSecondaryBtn.onclick = () => {
+                    hideSystemModal();
+                    startBtn.classList.add('hidden');
+                    pauseBtn.classList.remove('hidden');
+                    startBtn.querySelector('span').textContent = 'Tiếp tục';
+                };
+            }
         }
 
         function resetTimer() {
@@ -392,6 +422,7 @@
         pauseBtn.addEventListener('click', pauseTimer);
         resetBtn.addEventListener('click', resetTimer);
         modalActionBtn.addEventListener('click', hideSystemModal);
+        modalSecondaryBtn.addEventListener('click', hideSystemModal);
 
         [hoursInput, minutesInput, secondsInput].forEach(input => {
             input.addEventListener('change', () => {
